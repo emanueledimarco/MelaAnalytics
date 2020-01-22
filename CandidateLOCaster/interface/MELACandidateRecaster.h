@@ -5,7 +5,7 @@
 #include <cmath>
 #include <vector>
 #include <cstdlib>
-#include "Mela.h"
+#include "ZZMatrixElement/MELA/interface/Mela.h"
 
 
 class MELACandidateRecaster{

@@ -14,7 +14,7 @@
 #ifndef MELAHYPOTHESIS_H
 #define MELAHYPOTHESIS_H
 
-#include "Mela.h"
+#include "ZZMatrixElement/MELA/interface/Mela.h"
 #include "MELAOptionParser.h"
 
 

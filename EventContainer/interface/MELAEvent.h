@@ -5,7 +5,7 @@
 #include <string>
 #include "TLorentzVector.h"
 #include "ParticleComparators.h"
-#include "MELACandidate.h"
+#include "ZZMatrixElement/MELA/interface/MELACandidate.h"
 
 
 class MELAEvent{

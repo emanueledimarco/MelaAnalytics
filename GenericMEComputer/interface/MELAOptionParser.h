@@ -29,8 +29,8 @@
 #include <algorithm>
 #include <cassert>
 #include "TString.h"
-#include "PDGHelpers.h"
-#include "TCouplings.hh"
+#include "ZZMatrixElement/MELA/interface/PDGHelpers.h"
+#include "ZZMatrixElement/MELA/interface/TCouplings.hh"
 
 
 class MELAOptionParser{
