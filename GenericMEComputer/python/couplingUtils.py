@@ -32,9 +32,22 @@ def make_allconstants(constants):
         ret['alphas'] = constants['gs']**2/(4*math.pi)
     return ret
 
+
+## ArXiv 1906.06949 eq 5.3, 5.4, 5.5
+def _SMHLoops_F12(tau):
+    return -2*tau-2*tau*(1-tau)*_SMHLoops_ftau(tau)
+def _SMHLoops_F1(tau):
+    return 2+3*tau*(1+(2-tau)*_SMHLoops_ftau(tau))
+def _SMHLoops_ftau(tau):
+    if tau >= 1:
+        return (math.asin(math.sqrt(1/tau)))**2
+    else:
+        rad = math.sqrt(1-tau)
+        return -0.25*(complex(math.log((1+rad)/(1-rad)), -math.pi))**2
+
 def make_warsaw_smeftsim_MW(warsaw):
     ret = dict(p for p in warsaw.iteritems())
-    for p in [      'cG',  'cGtil',  
+    zeropars = [    'cG',  'cGtil',  
                     'cH',  
                     'cHB',  'cHBtil',  
                     'cHDD',  
@@ -91,11 +104,16 @@ def make_warsaw_smeftsim_MW(warsaw):
                     'cud1',  
                     'cud8',  
                     'cuu',  
-                    'cuu1']:
+                    'cuu1']
+    for p in zeropars:
         if p not in ret: ret[p] = 0
     if 'LambdaSMEFT' not in ret: 
         ret['LambdaSMEFT'] = 1e3
+    for p in ret.keys():
+        if p not in zeropars and p != 'LambdaSMEFT':
+            raise RuntimeError("Bogus parameter %s not in SMEFTsim Warsaw basis" % p)
     return ret
+
 def warsaw_smeftsim_MW_to_higgs(warsaw, constants=constants_mWscheme):
     src = make_warsaw_smeftsim_MW(warsaw)
     all_constants = make_allconstants(constants)
@@ -155,6 +173,23 @@ def warsaw_smeftsim_MW_to_higgs(warsaw, constants=constants_mWscheme):
     # and complete the Higgs basis
     return make_hig(M, constants=constants)
 
+def warsaw_smeftsim_to_smeftnlo(smeftsim):
+    src = make_warsaw_smeftsim_MW(smeftsim)
+    out = dict()
+    out[('dim6','Lambda')] = src['LambdaSMEFT']
+    out[('dim6','cpDC')  ] = src['cHDD']
+    out[('dim6','cpWB')  ] = src['cHWB']
+    out[('dim6','cdp')   ] = src['cHbox']
+    out[('dim6','cp')    ] = src['cH']
+    out[('dim6','cWWW')  ] = src['cW']
+    out[('dim6','cG')    ] = src['cHWB']
+    out[('dim6','cpG')   ] = src['cHG']
+    out[('dim6','cpW')   ] = src['cHW']
+    out[('dim6','cpBB')  ] = src['cHB']
+    # I'm to lazy now to do the rest
+    return out
+    
+
 def make_hel(hel):
     ret = dict(p for p in hel.iteritems())
     if "cW" in ret and "cWW" in ret and ret["cW"] != ret["cWW"]:
@@ -200,6 +235,62 @@ def hel2hig(hel, constants = constants_alphaScheme):
     # and complete the Higgs basis
     return make_hig(ret, constants=constants)
 
+def full_hc(hc):
+    full = dict(p for p in hc.iteritems())
+    zeropars = [ 'cosa', 'kHtt', 'kAtt', 'kHbb', 'kAbb', 'kHll', 'kAll', 'kHaa', 'kAaa', 'kHza', 'kAza', 'kHgg', 'kAgg', 'kHzz', 'kAzz', 'kHww', 'kAww', 'kHda', 'kHdz', 'kHdwR', 'kHdwI', 'kHcc', 'kAcc' ]
+    for p in zeropars:
+        if p not in full: full[p] = 0
+    if 'Lambda' not in full:
+        full['Lambda'] = 1e3
+    if 'kSM' not in full:
+        full['kSM'] = 1e3
+    for k in full.iterkeys():
+        if k not in zeropars and k not in ('Lambda', 'kSM'):
+            raise RuntimeError("Bogus parameter %s not in HC basis" % k)
+    return full
+
+def hc2hig(hc, constants = constants_alphaScheme):
+    ret = []
+    all_constants = make_allconstants(constants)
+    cw2, sw2, g2, gp2 = [ all_constants[x]**2 for x in ("cw","sw","g","gprime") ]
+
+def hig2hc(hig, Lambda=1e3, alpha=0, constants = constants_alphaScheme):
+    hig = make_hig(hig, constants = constants)
+
+    cpval = max(abs(hig[k]) for k in 'tcAA tcZZ tcZA'.split())
+    if cpval > 1e-6:
+        if alpha == 0: 
+            alpha = math.atan(cpval)
+            print "ERROR, can't implement cp-violating operators with alpha = 0. Will set alpha = %g" % alpha
+
+    all_constants = make_allconstants(constants)
+    v, g, gp = [ all_constants[x]**2 for x in ("v","g","gprime") ]
+    cw2, sw2, g2, gp2, e2 = [ all_constants[x]**2 for x in ("cw","sw","g","gprime","e") ]
+    ca = math.cos(alpha); sa = math.sin(alpha)
+    pi2 = math.pi**2
+
+    ret = dict(Lambda=Lambda, cosa = ca,
+            kSM = (1 + hig['dcZ'])/ca,
+            kHaa = -72*pi2/(47*ca) * hig['cAA'],
+            kAaa = - 3*pi2 / sa * hig['tcAA'] if sa else 0,
+            kHgg = 12*pi2/ca * hig['cGG'],
+            kAgg = - 8*pi2 / sa * hig['tcGG'] if sa else 0,
+            kHzz = - (g2+gp2)*Lambda/(v*ca) * hig['cZZ'],
+            kAzz = - (g2+gp2)*Lambda/(v*sa) * hig['tcZZ'] if sa else 0,
+            kHww = - (  g2  )*Lambda/(v*ca) * (hig[ 'cZZ'] + 2*sw2*hig[ 'cZA'] + sw2*sw2*hig[ 'cAA']),
+            kAww = - (  g2  )*Lambda/(v*sa) * (hig['tcZZ'] + 2*sw2*hig['tcZA'] + sw2*sw2*hig['tcAA'])  if sa else 0,
+            kHdz = - (  g2  )*Lambda/(v*ca) * hig['cZBox'],
+            kHda = - ( g*gp )*Lambda/((g2-gp2)*v*ca) * (
+                                2*g2*hig['cZBox'] + (g2+gp2)*hig['cZZ'] - e2*hig['cAA'] - (g2-gp2)*hig['cZA']),
+            kHdwR = - ( g2 )*Lambda/((g2-gp2)*v*ca) * (
+                                g2*hig['cZBox'] + gp2*hig['cZZ'] - e2*sw2*hig['cAA'] - (g2-gp2)*sw2*hig['cZA']),
+            kHdwI = 0., ## FIXME not sure what this is?
+            kHza  = -144*pi2/(94*cw2-13)/ca * hig['cZA'],
+            kAza  = -24*pi2/(8*cw2-5)/sa * hig['tcZA']  if sa else 0,
+            )
+    return full_hc(ret)
+
+
 def make_hig(hig = {}, constants = constants_alphaScheme):
     """Set to zero missing coefficients, calculate dependent coefficients"""
     ## First, set to zero any missing coefficient
@@ -208,18 +299,23 @@ def make_hig(hig = {}, constants = constants_alphaScheme):
                "tcGG", "tcAA", "tcZA", "tcZZ", 
                "dm" ]:
         if p not in ret: ret[p] = 0
-    # now expand
+    # now expand if necessary
     # YR4 arXiv 1610.07922 eq II.2.38 p297  (and checked against Rosetta)
-    for k in "dcW" , "cWW", "tcWW", "cWBox", "cABox":
-        if k in hig: raise RuntimeError("Parameter set already expanded: %s" % hig)
     all_constants = make_allconstants(constants)
     cw, sw, mZ, g, gp, e = [ all_constants[x] for x in ("cw","sw","mZ","g","gprime","e") ]
     g2, gp2, e2 = g**2, gp**2, e**2
-    ret['dcW'] = ret['dcZ'] + 4*ret['dm']
-    ret['cWW']      = ret['cZZ']      + 2 * (sw**2) * ret['cZA']      + (sw**4) * ret['cAA'] 
-    ret['tcWW'] = ret['tcZZ'] + 2 * (sw**2) * ret['tcZA'] + (sw**4) * ret['tcAA'] 
-    ret['cWBox'] = (    g2 * ret['cZBox'] +    gp2   * ret['cZZ'] - e2*(sw**2) * ret['cAA'] - (g2-gp2) * (sw**2) * ret['cZA'] )/(g2-gp2)
-    ret['cABox'] = (2 * g2 * ret['cZBox'] + (g2+gp2) * ret['cZZ'] - e2         * ret['cAA'] - (g2-gp2)           * ret['cZA'] )/(g2-gp2)
+    exp = dict()
+    exp['dcW'] = ret['dcZ'] + 4*ret['dm']
+    exp['cWW'] = ret['cZZ']      + 2 * (sw**2) * ret['cZA']      + (sw**4) * ret['cAA'] 
+    exp['tcWW'] = ret['tcZZ'] + 2 * (sw**2) * ret['tcZA'] + (sw**4) * ret['tcAA'] 
+    exp['cWBox'] = (    g2 * ret['cZBox'] +    gp2   * ret['cZZ'] - e2*(sw**2) * ret['cAA'] - (g2-gp2) * (sw**2) * ret['cZA'] )/(g2-gp2)
+    exp['cABox'] = (2 * g2 * ret['cZBox'] + (g2+gp2) * ret['cZZ'] - e2         * ret['cAA'] - (g2-gp2)           * ret['cZA'] )/(g2-gp2)
+    for (k,v) in exp.iteritems():
+        if k in ret:
+            if abs(ret[k] - v) > 1e-9:
+                raise RuntimeError("Parameter set already expanded: %s, old = %g new = %g diff = %g, all %s" % (k,ret[k],v,ret[k]-v,hig))
+        else:
+            ret[k] = v
     return ret
 
 def make_free_higlike(hig = {}, constants = constants_alphaScheme):
@@ -231,10 +327,20 @@ def make_free_higlike(hig = {}, constants = constants_alphaScheme):
         if p not in ret: ret[p] = 0
     return ret
 
-def hig2jhu(hig, constants = constants_alphaScheme):
+def hig2jhu(hig, constants = constants_alphaScheme, SMLoop=False, Flip=False, noGamma=False):
     # JHU manual, eq 3
     all_constants = make_allconstants(constants)
-    (mW, mZ, e, cw, sw, gs) = [ all_constants[x] for x in ("mW","mZ","e","cw","sw","gs") ]
+    (mW, mZ, e, cw, sw, gs, mH) = [ all_constants[x] for x in ("mW","mZ","e","cw","sw","gs",'mH') ]
+    mtop = 172.
+    if SMLoop:
+        SM_cAA_eff = - (_SMHLoops_F1((2*mW/mH)**2) + 3*(2/3.)**2*_SMHLoops_F12((2*mtop/mH)**2)) / (8 * math.pi**2)
+        SM_cZA_eff = - 0.0592 ## FIXME analytic expression would be nice, but it's complicated
+        if SMLoop == "flip":
+            SM_cZA_eff = -SM_cZA_eff
+    else:
+        SM_cAA_eff = 0
+        SM_cZA_eff = 0
+    ###
     return dict(
             g1zz = 2.0  +     2        * hig['dcZ'],
             g2zz = -0.5 * (e/sw/cw)**2 * hig['cZZ'],
@@ -244,11 +350,11 @@ def hig2jhu(hig, constants = constants_alphaScheme):
             g2ww = -0.5 * (e/sw)**2    * hig['cWW'],
             l1ww =        (e/mW/sw)**2 * hig['cWBox'],
             g4ww = -0.5 * (e/sw)**2    * hig['tcWW'],
-            g2za = -0.5 * (e**2/sw/cw) * hig['cZA'],
-            l1za = (e**2/sw/cw/mZ**2)  * hig['cABox'],
-            g4za = -0.5 * (e**2/sw/cw) * hig['tcZA'],
-            g2aa = -0.5 * (e**2)       * hig['cAA'],
-            g4aa = -0.5 * (e**2)       * hig['tcAA'],
+            g2za = -0.5 * (e**2/sw/cw) *(hig['cZA'] + SM_cZA_eff) * (-1 if Flip else +1) * (0 if noGamma else 1),
+            l1za = (e**2/sw/cw/mZ**2)  * hig['cABox']             * (-1 if Flip else +1) * (0 if noGamma else 1),
+            g4za = -0.5 * (e**2/sw/cw) * hig['tcZA']              * (-1 if Flip else +1) * (0 if noGamma else 1),
+            g2aa = -0.5 * (e**2)       *(hig['cAA'] + SM_cAA_eff) * (0 if noGamma else 1), 
+            g4aa = -0.5 * (e**2)       * hig['tcAA']              * (0 if noGamma else 1),
             g2gg = -0.5 * (gs**2)      * hig['cGG'],
             g4gg = -0.5 * (gs**2)      * hig['tcGG'],
             )
@@ -265,7 +371,7 @@ def jhu2mela(jhu):
 def mela2string(mela):
     ret = ["separateWWZZcouplings=1"] 
     for k,v in mela.iteritems():
-        if v == 0: continue
+        if abs(v) < 1e-8: continue
         if k[0] == "g": 
             if isinstance(v, complex):
                 ret.append("%s=%g,%g" % (k,v.real,v.imag))
@@ -302,8 +408,14 @@ def warsaw_scan_strings(couplings, constants=constants_mWscheme, quadratic=False
     return [ "Name:%s %s" % (name, jhu2string(hig2jhu(warsaw_smeftsim_MW_to_higgs(point, constants=constants), constants=constants))) for (name,point) in scan ]
 
 
-def byhand_hig_strings(scan, constants=constants_alphaScheme):
-    return [ "Name:%s %s" % (name, jhu2string(hig2jhu(point, constants=constants))) for (name,point) in scan ]
+def byhand_hig_strings(scan, constants=constants_alphaScheme, SMLoop=False, Flip=False, noGamma=False):
+    return [ "Name:%s %s" % (name, jhu2string(hig2jhu(point, constants=constants, SMLoop=SMLoop, Flip=Flip, noGamma=noGamma))) for (name,point) in scan ]
 
 
-
+def _try_smeftsim(**kwargs):
+    print sorted((k,v) for (k,v) in warsaw_smeftsim_MW_to_higgs(kwargs, constants_mWscheme).iteritems() if abs(v) > 1e-9)
+def _try_smeftsim_tilde(**kwargs):
+    scaleds = dict((k,v/0.24621965079413738**2) for (k,v) in kwargs.iteritems())
+    print sorted((k,v) for (k,v) in warsaw_smeftsim_MW_to_higgs(scaleds, constants_mWscheme).iteritems() if abs(v) > 1e-9)
+def _try_hel(**kwargs):
+    print sorted((k,v) for (k,v) in hel2hig(kwargs).iteritems() if abs(v) > 1e-9)
