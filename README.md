@@ -12,8 +12,8 @@
 ### MELA
 
 ```
-git clone https://github.com/cms-analysis/HiggsAnalysis-ZZMatrixElement.git ZZMatrixElement
-(cd ZZMatrixElement; git checkout -b from-v222 v2.2.2; source setup.sh -j;)
+git clone https://github.com/cms-analysis/HiggsAnalysis-JHUGenMELA.git JHUGenMELA
+(cd JHUGenMELA; git checkout -b from-v222 v2.2.2; source setup.sh -j;)
 ```
 
 ### MELA Analytics

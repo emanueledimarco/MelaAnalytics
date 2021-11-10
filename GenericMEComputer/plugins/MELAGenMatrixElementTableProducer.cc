@@ -9,8 +9,8 @@
 #include "FWCore/Utilities/interface/transform.h"
 #include "SimDataFormats/GeneratorProducts/interface/LHEEventProduct.h"
 
-#include "ZZMatrixElement/MELA/interface/Mela.h"
-#include "ZZMatrixElement/MELA/interface/Mela.h"
+#include "JHUGenMELA/MELA/interface/Mela.h"
+#include "JHUGenMELA/MELA/interface/Mela.h"
 #include "MelaAnalytics/EventContainer/interface/MELAEvent.h"
 #include "MelaAnalytics/GenericMEComputer/interface/MELAOptionParser.h"
 #include "MelaAnalytics/GenericMEComputer/interface/MELAHypothesis.h"

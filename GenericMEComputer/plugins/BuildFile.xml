@@ -3,9 +3,10 @@
 <use   name="FWCore/ServiceRegistry"/>
 <use   name="FWCore/Utilities"/>
 <use   name="DataFormats/Candidate"/>
+<use   name="DataFormats/HepMCCandidate"/>
 <use   name="DataFormats/NanoAOD"/>
 <use   name="SimDataFormats/GeneratorProducts"/>
-<use   name="ZZMatrixElement/MELA"/>
+<use   name="JHUGenMELA/MELA"/>
 <use   name="MelaAnalytics/GenericMEComputer"/>
 <use   name="MelaAnalytics/CandidateLOCaster"/>
 <use   name="CommonLHETools/LHEHandler"/>

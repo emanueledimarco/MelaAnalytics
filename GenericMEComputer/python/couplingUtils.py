@@ -1,11 +1,19 @@
 import math
 
+####################################################################################
+#############  General utilities, e.g. to convert among EWK schemes  ###############
+####################################################################################
+
 # follow sec 3.1 of arxiv 1709.06492
 vckm_triv = [[1,0,0],[0,1,0],[0,0,1]]
-constants_mWscheme = dict(mZ = 91.1876, mW = 80.365, Gf = 1.1663787e-5, mH = 125.09, alphas = 0.1181, vckm = vckm_triv)
+constants_mWScheme = dict(mZ = 91.1876, mW = 80.365, Gf = 1.1663787e-5, mH = 125.09, alphas = 0.1181, vckm = vckm_triv)
 constants_alphaScheme = dict(mZ = 91.1876, alpha = 1.0/127.950, Gf = 1.1663787e-5, mH = 125.09, alphas = 0.1181, vckm = vckm_triv)
+constants_HELatNLODefault = dict(mZ = 91.1876, alpha = 1.0/127.90, Gf = 1.16637e-5, mH = 125.09, alphas = 0.1184, vckm = vckm_triv)  
 
 def make_allconstants(constants):
+    if "cw" in constants and "sw" in constants and "mZ" in constants and "mW" in constants and "g" in constants and "gprime" in constants:
+        # assume it's already a full set
+        return constants
     ret = dict(mZ = constants['mZ'], Gf = constants['Gf'], mH = constants['mH'], vckm = constants['vckm'])
     ret['v'] = 1.0/math.sqrt(math.sqrt(2) * ret['Gf'])
     if 'alpha' in constants:
@@ -32,7 +40,7 @@ def make_allconstants(constants):
         ret['alphas'] = constants['gs']**2/(4*math.pi)
     return ret
 
-
+## SM Effective EWK loops
 ## ArXiv 1906.06949 eq 5.3, 5.4, 5.5
 def _SMHLoops_F12(tau):
     return -2*tau-2*tau*(1-tau)*_SMHLoops_ftau(tau)
@@ -44,6 +52,10 @@ def _SMHLoops_ftau(tau):
     else:
         rad = math.sqrt(1-tau)
         return -0.25*(complex(math.log((1+rad)/(1-rad)), -math.pi))**2
+
+####################################################################################
+#############  SMEFTsim A & B. Validated at LO #####################################
+####################################################################################
 
 def make_warsaw_smeftsim_MW(warsaw):
     ret = dict(p for p in warsaw.iteritems())
@@ -114,7 +126,7 @@ def make_warsaw_smeftsim_MW(warsaw):
             raise RuntimeError("Bogus parameter %s not in SMEFTsim Warsaw basis" % p)
     return ret
 
-def warsaw_smeftsim_MW_to_higgs(warsaw, constants=constants_mWscheme):
+def warsaw_smeftsim_MW_to_higgs(warsaw, constants=constants_mWScheme):
     src = make_warsaw_smeftsim_MW(warsaw)
     all_constants = make_allconstants(constants)
     # first do some stupid translation to Rosetta notation 
@@ -173,6 +185,8 @@ def warsaw_smeftsim_MW_to_higgs(warsaw, constants=constants_mWscheme):
     # and complete the Higgs basis
     return make_hig(M, constants=constants)
 
+## Translation to SMEFTatNLO naming scheme
+
 def warsaw_smeftsim_to_smeftnlo(smeftsim):
     src = make_warsaw_smeftsim_MW(smeftsim)
     out = dict()
@@ -189,6 +203,9 @@ def warsaw_smeftsim_to_smeftnlo(smeftsim):
     # I'm to lazy now to do the rest
     return out
     
+####################################################################################
+#############  HEL MODEL (arXiv 1310.5150). NOT VALIDATED  #########################
+####################################################################################
 
 def make_hel(hel):
     ret = dict(p for p in hel.iteritems())
@@ -210,7 +227,7 @@ def make_hel(hel):
         if p not in ret: ret[p] = 0
     return ret
 
-def hel2hig(hel, constants = constants_alphaScheme):
+def hel_to_higgs_YR4(hel, constants = constants_alphaScheme):
     # Use coefficients names as in the HEL UFO, LHC HXSWG 2019-04, CMS PAS HIG-19-005
     ## First, set to zero any missing coefficient
     src = make_hel(hel)
@@ -234,6 +251,164 @@ def hel2hig(hel, constants = constants_alphaScheme):
     ret['tcZA'] = 2/g2 * ( src['tcHB'] - src['tcHW'] - 8 * sw2 * src['tcA'] )
     # and complete the Higgs basis
     return make_hig(ret, constants=constants)
+
+def hel_to_higgs_axiv1609p04833(hel, constants = constants_alphaScheme):
+    # Use coefficients names as in the HEL UFO, LHC HXSWG 2019-04, CMS PAS HIG-19-005
+    ## First, set to zero any missing coefficient
+    src = make_hel(hel)
+    ## Then translate according to a mix of YR4 and axiv1609.04833
+    all_constants = make_allconstants(constants)
+    sw2, g2, gp2 = [ all_constants[x]**2 for x in ("sw","g","gprime") ]
+    
+    cpHL22 = 0 # FIXME is this cpHL ?
+    ret = dict()
+    ret['dm'] = -gp2/(g2-gp2) * (src['cW'] + src['cB'] + src['c2W'] + src['c2B'] - g2/(2*gp2) * src['cT'] + 0.5*cpHL22)
+    ret['dcZ'] = -0.5 * src['cH'] - 1.5*cpHL22
+
+    ret['cGG'] = 16/(g2) * src['cG'] ## Note: it's g and not gs, since the gs is added in the lagrangian on top of it
+    ret['cAA'] = 16/(g2) * src['cA']
+    ret['cZZ'] = -4/(g2+gp2) * ( src['cHW'] +  gp2/g2 * src['cHB'] - 4*gp2/g2 * sw2 * src['cA'] )
+    ret['cZBox'] = 2/g2 * ( src['cW'] + src['cHW'] + src['c2W'] + 
+                             gp2/g2 * ( src['cB'] + src['cHB'] + src['c2B']) - 0.5*src['cT'] + 0.5*cpHL22 )
+    ret['cZA'] = 2/g2 * ( src['cHB'] - src['cHW'] - 8 * sw2 * src['cA'] )
+
+    #inferred from the non-tilde versions
+    ret['tcGG'] = 16/(g2) * src['tcG'] 
+    ret['tcAA'] = 16/(g2) * src['tcA']
+    ret['tcZZ'] = -4/(g2+gp2) * ( src['tcHW'] +  gp2/g2 * src['tcHB'] - 4*gp2/g2 * sw2 * src['tcA'] )
+    ret['tcZA'] = 2/g2 * ( src['tcHB'] - src['tcHW'] - 8 * sw2 * src['tcA'] )
+    # and complete the Higgs basis
+    return make_hig(ret, constants=constants)
+
+def hel_to_higgs(hel, constants = constants_alphaScheme):
+    return hel_to_higgs_YR4(hel, constants = constants)
+
+####################################################################################
+#############  HELatNLO MODEL (arXiv 1609.04833). Validated at LO ##################
+####################################################################################
+
+def make_helatnlo(hel):
+    ret = dict(p for p in hel.iteritems())
+    couplings = "cHW cHB cB cBB cWW".split()
+    for k in ret.iterkeys():
+        if k == "npl": continue
+        if k not in couplings: raise RuntimeError("Found %s not recognized by HELatNLO" % k)
+    for k in couplings:
+        if k not in ret: ret[k] = 0.0
+    if "npl" not in ret: 
+        ret["npl"] = 1e3
+    return ret
+
+def helatnlo_constants_shifted_alphaScheme(hel, constants = constants_alphaScheme, debug=False):
+    ## from https://feynrules.irmp.ucl.ac.be/attachment/wiki/HELatNLO/HELatNLO.fr
+    from math import pi, sqrt
+    C = make_helatnlo(hel)
+    K0 = make_allconstants(constants)
+    K = dict((k,K0[k]) for k in "mZ Gf alpha v mH alphas gs vckm".split())
+    v, mZ, NPl = K["v"], K["mZ"], C["npl"]
+    e = sqrt(4*pi*K["alpha"]) * ( 1 + 0.5 * C['cWW'] * pi * K["alpha"] * (v/NPl)**2 )
+    cw2 = (( mZ**2 * (8 * NPl**2 - 4 * C['cB'] * e**2 * v**2) + 
+              4 * mZ * sqrt((mZ - e * v) * (mZ + e * v)) * (2 * NPl**2 + C['cB'] * e**2 * v**2)
+              - e**2 * v**2 * (8 * NPl**2 + C['cWW'] * e**2 * v**2)) / 
+           (16 * mZ * NPl**2 * sqrt((mZ - e * v) * (mZ + e * v))))
+    sw2 = 1 - cw2
+    sw, cw = sqrt(sw2), sqrt(cw2)
+    mW = e*v / ( 2 * sw)
+    g  = e/sw / (1 + C['cWW'] * e**2 / sw2 * (v/NPl)**2 / 8)
+    gp = e/cw / (1 + C['cBB'] * e**2 / cw2 * (v/NPl)**2 / 4)
+    K["cw"] = cw; K["sw"] = sw
+    K["e"] = e; K["g"] = g; K["gprime"] = gp
+    K["mW"] = mW
+    if debug:
+        for k in "mW cw sw g gprime e".split():
+            print "  %7s  %9.5f -> %9.5f   ratio = %.4f   ratio - 1 = %+.3e" % (k,K0[k],K[k],K[k]/K0[k],K[k]/K0[k]-1)
+    return K
+
+def helatnlo_constants_shifted_mWScheme(hel, constants = constants_mWScheme, debug=False, tol=1e-6):
+    # solve numerically for the value of alpha that keeps mW as requested, as inverting the above is unfeasible
+    K0 = make_allconstants(constants)
+    mW0 = K0["mW"]
+    I = dict((k,K0[k]) for k in "mZ Gf alpha mH alphas vckm".split())
+    K = helatnlo_constants_shifted_alphaScheme(hel, I)
+    if debug:
+        print "  step %2d: alpha = %.9f : mW = %9.5f -> %9.5f   ratio = %.4f   ratio - 1 = %+.3e" % (0,I["alpha"],K0["mW"],K["mW"],K["mW"]/K0["mW"],K["mW"]/K0["mW"]-1)
+    if abs(K["mW"]/mW0-1) < tol: return K
+
+    def dmW(x,_it=[0]): 
+        I["alpha"] = K0["alpha"] + x
+        K = helatnlo_constants_shifted_alphaScheme(hel, I)
+        if debug:
+            print "  step %2d: alpha = %.9f : mW = %9.5f -> %9.5f   ratio = %.4f   ratio - 1 = %+.3e" % (_it[0],I["alpha"],K0["mW"],K["mW"],K["mW"]/K0["mW"],K["mW"]/K0["mW"]-1)
+            _it[0] += 1
+            if _it[0] > 100: raise RuntimeError("Too many iterations")
+        return (K["mW"] - K0["mW"]), K
+
+    d0, _ = dmW(0)
+    delta = 1e-7
+
+    d1, K = dmW(delta)
+    if (abs(d1) < tol): return K   # just check we're not at zero already
+
+    if d1*d0 > 0 and abs(d1) > abs(d0):
+        if debug:
+            print "I was going the wrong way"
+        delta = - delta
+        d1, K = dmW(delta)
+        if (abs(d1) < tol): return K   # just check we're not at zero already
+        if abs(d1) > abs(d0):
+            raise RuntimeError("What do you do if both ways are bad?")
+    while d1*d0 > 0:
+        delta *= 2
+        d1, K = dmW(delta)
+        if (abs(d1) < tol): return K   # just check we're not at zero already
+        if abs(d1) > abs(d0):
+            raise RuntimeError("What do you do if both ways are bad?")
+    
+    x0, x1 = 0,  delta
+    y0, y1 = d0, d1
+    while abs(y0-y1) > tol:
+        xc = 0.5*(x0+x1)
+        yc, K = dmW(xc)
+        if yc*y0 > 0:
+            x0, y0 = xc, yc
+        else:
+            x1, y1 = xc, yc
+    return K
+
+def helatnlo_to_higgs(hel, constants = constants_HELatNLODefault, fixBoxes=True, scheme="mW"):
+    # Use coefficients names as in the HEL UFO, LHC HXSWG 2019-04, CMS PAS HIG-19-005
+    ## First, set to zero any missing coefficient
+    src = make_helatnlo(hel)
+    ## Then translate, according to 1609.04883 (matching the coefficients of lagrangian (16) from table (1) to those of YR4)
+    if scheme == "alpha":
+        all_constants = helatnlo_constants_shifted_alphaScheme(hel, constants = constants)
+    elif scheme == "mW":
+        all_constants = helatnlo_constants_shifted_mWScheme(hel, constants = constants)
+    else:
+        all_constants = make_allconstants(constants)
+    sw2, cw2 = [ all_constants[x]**2 for x in ("sw","cw") ]
+    scale = (all_constants["v"]/src["npl"])**2
+    ret = dict()
+    ret['dm']    = 0 # FIXME 
+    ret['dcZ']   = 0 # FIXME
+    ret['cAA']   = scale * src['cBB']
+    ret['cZZ']   = scale * (-0.5 * cw2 * src['cHW'] - sw2 * src['cHB'] + sw2**2 * src['cBB'] )
+    ret['cZBox'] = scale *  0.25 * ( (src['cHW'] + src['cWW'])  + 2 * sw2/cw2 * (src['cHB'] + src['cB']) )
+    ret['cZA']   = scale * -0.25 * ( src['cHW'] - 2*src['cHB'] + 4 * sw2 * src['cBB'] )
+    ## complete the Higgs basis
+    #ret['cWW']   = scale *  -0.5 * src['cHW']
+    ret = make_hig(ret, constants=all_constants)
+    if fixBoxes:
+        ## dependent couplings from the paper which don't seem to match with what computed from the above
+        ## note: fixBoxes = False gives clearly bad results (at least compared to MELA)
+        ret['cABox'] = scale * 0.25 * ( (src['cHW'] + src['cWW'])  - 2 * (src['cHB'] + src['cB']) ) # paper has cBB instead of cHB, but it's clearly a typo
+        ret['cWBox'] = scale * 0.25 * (src['cHW'] + src['cWW'])
+    return ret
+
+
+####################################################################################
+#############  Higgs Characterization Model (NOT VALIDATED)  #######################
+####################################################################################
 
 def full_hc(hc):
     full = dict(p for p in hc.iteritems())
@@ -290,6 +465,9 @@ def hig2hc(hig, Lambda=1e3, alpha=0, constants = constants_alphaScheme):
             )
     return full_hc(ret)
 
+####################################################################################
+#############  Higgs Basis and translation to JHUGen  ##############################
+####################################################################################
 
 def make_hig(hig = {}, constants = constants_alphaScheme):
     """Set to zero missing coefficients, calculate dependent coefficients"""
@@ -327,7 +505,7 @@ def make_free_higlike(hig = {}, constants = constants_alphaScheme):
         if p not in ret: ret[p] = 0
     return ret
 
-def hig2jhu(hig, constants = constants_alphaScheme, SMLoop=False, Flip=False, noGamma=False):
+def hig2jhu(hig, constants = constants_alphaScheme, SMLoop=False, FlipZG=True, FlipGG=False, noGamma=False):
     # JHU manual, eq 3
     all_constants = make_allconstants(constants)
     (mW, mZ, e, cw, sw, gs, mH) = [ all_constants[x] for x in ("mW","mZ","e","cw","sw","gs",'mH') ]
@@ -335,8 +513,10 @@ def hig2jhu(hig, constants = constants_alphaScheme, SMLoop=False, Flip=False, no
     if SMLoop:
         SM_cAA_eff = - (_SMHLoops_F1((2*mW/mH)**2) + 3*(2/3.)**2*_SMHLoops_F12((2*mtop/mH)**2)) / (8 * math.pi**2)
         SM_cZA_eff = - 0.0592 ## FIXME analytic expression would be nice, but it's complicated
-        if SMLoop == "flip":
+        if SMLoop == "flipZG":
             SM_cZA_eff = -SM_cZA_eff
+        elif SMLoop == "flipGG":
+            SM_cAA_eff = -SM_cAA_eff
     else:
         SM_cAA_eff = 0
         SM_cZA_eff = 0
@@ -350,11 +530,11 @@ def hig2jhu(hig, constants = constants_alphaScheme, SMLoop=False, Flip=False, no
             g2ww = -0.5 * (e/sw)**2    * hig['cWW'],
             l1ww =        (e/mW/sw)**2 * hig['cWBox'],
             g4ww = -0.5 * (e/sw)**2    * hig['tcWW'],
-            g2za = -0.5 * (e**2/sw/cw) *(hig['cZA'] + SM_cZA_eff) * (-1 if Flip else +1) * (0 if noGamma else 1),
-            l1za = (e**2/sw/cw/mZ**2)  * hig['cABox']             * (-1 if Flip else +1) * (0 if noGamma else 1),
-            g4za = -0.5 * (e**2/sw/cw) * hig['tcZA']              * (-1 if Flip else +1) * (0 if noGamma else 1),
-            g2aa = -0.5 * (e**2)       *(hig['cAA'] + SM_cAA_eff) * (0 if noGamma else 1), 
-            g4aa = -0.5 * (e**2)       * hig['tcAA']              * (0 if noGamma else 1),
+            g2za = -0.5 * (e**2/sw/cw) *(hig['cZA'] + SM_cZA_eff) * (-1 if FlipZG else +1) * (0 if noGamma else 1),
+            l1za = (e**2/sw/cw/mZ**2)  * hig['cABox']             * (-1 if FlipZG else +1) * (0 if noGamma else 1),
+            g4za = -0.5 * (e**2/sw/cw) * hig['tcZA']              * (-1 if FlipZG else +1) * (0 if noGamma else 1),
+            g2aa = -0.5 * (e**2)       *(hig['cAA'] + SM_cAA_eff) * (-1 if FlipGG else +1)* (0 if noGamma else 1), 
+            g4aa = -0.5 * (e**2)       * hig['tcAA']              * (-1 if FlipGG else +1)* (0 if noGamma else 1),
             g2gg = -0.5 * (gs**2)      * hig['cGG'],
             g4gg = -0.5 * (gs**2)      * hig['tcGG'],
             )
@@ -384,6 +564,10 @@ def mela2string(mela):
 def jhu2string(jhu): 
     return mela2string(jhu2mela(jhu))
 
+####################################################################################
+#############  Utilities for scans  ################################################
+####################################################################################
+
 def make_scan(couplings,quadratic=False):
     ret = [ ("SM",dict()) ]
     for (c,v) in couplings.iteritems():
@@ -401,21 +585,26 @@ def hig_scan_strings(couplings, constants=constants_alphaScheme, quadratic=False
 
 def hel_scan_strings(couplings, constants=constants_alphaScheme, quadratic=False):
     scan = make_scan(couplings, quadratic=quadratic)
-    return [ "Name:%s %s" % (name, jhu2string(hig2jhu(hel2hig(point), constants=constants))) for (name,point) in scan ]
+    return [ "Name:%s %s" % (name, jhu2string(hig2jhu(hel_to_higgs(point), constants=constants))) for (name,point) in scan ]
 
-def warsaw_scan_strings(couplings, constants=constants_mWscheme, quadratic=False):
+def warsaw_scan_strings(couplings, constants=constants_mWScheme, quadratic=False):
     scan = make_scan(couplings, quadratic=quadratic)
     return [ "Name:%s %s" % (name, jhu2string(hig2jhu(warsaw_smeftsim_MW_to_higgs(point, constants=constants), constants=constants))) for (name,point) in scan ]
 
 
-def byhand_hig_strings(scan, constants=constants_alphaScheme, SMLoop=False, Flip=False, noGamma=False):
-    return [ "Name:%s %s" % (name, jhu2string(hig2jhu(point, constants=constants, SMLoop=SMLoop, Flip=Flip, noGamma=noGamma))) for (name,point) in scan ]
+def byhand_hig_strings(scan, constants=constants_alphaScheme, SMLoop=False, FlipZG=False, FlipGG=False, noGamma=False):
+    return [ "Name:%s %s" % (name, jhu2string(hig2jhu(point, constants=constants, SMLoop=SMLoop, FlipZG=FlipZG, FlipGG=FlipGG, noGamma=noGamma))) for (name,point) in scan ]
 
+####################################################################################
+#############  Utilities for interactive exploring of EFT space  ###################
+####################################################################################
 
 def _try_smeftsim(**kwargs):
-    print sorted((k,v) for (k,v) in warsaw_smeftsim_MW_to_higgs(kwargs, constants_mWscheme).iteritems() if abs(v) > 1e-9)
+    print sorted((k,v) for (k,v) in warsaw_smeftsim_MW_to_higgs(kwargs, constants_mWScheme).iteritems() if abs(v) > 1e-9)
 def _try_smeftsim_tilde(**kwargs):
     scaleds = dict((k,v/0.24621965079413738**2) for (k,v) in kwargs.iteritems())
-    print sorted((k,v) for (k,v) in warsaw_smeftsim_MW_to_higgs(scaleds, constants_mWscheme).iteritems() if abs(v) > 1e-9)
+    print sorted((k,v) for (k,v) in warsaw_smeftsim_MW_to_higgs(scaleds, constants_mWScheme).iteritems() if abs(v) > 1e-9)
 def _try_hel(**kwargs):
-    print sorted((k,v) for (k,v) in hel2hig(kwargs).iteritems() if abs(v) > 1e-9)
+    print sorted((k,v) for (k,v) in hel_to_higgs(kwargs).iteritems() if abs(v) > 1e-9)
+def _try_helatnlo(fixBoxes=True, scheme="mW", **kwargs):
+    print sorted((k,v) for (k,v) in helatnlo_to_higgs(kwargs, fixBoxes=fixBoxes, scheme=scheme).iteritems() if abs(v) > 1e-9)
