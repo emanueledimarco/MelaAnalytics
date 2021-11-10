@@ -164,6 +164,10 @@ MELAGenMatrixElementTableProducer::MELAGenMatrixElementTableProducer( edm::Param
 
 
 void MELAGenMatrixElementTableProducer::beginRun(const edm::Run& iRun, const edm::EventSetup&) {
+
+}
+
+void MELAGenMatrixElementTableProducer::endRun(const edm::Run& iRun, const edm::EventSetup&) {
     if (firstRun_) {
         edm::Handle<LHERunInfoProduct> lheInfo;
         for (const auto & lheLabel: lheLabel_) {
@@ -174,11 +178,7 @@ void MELAGenMatrixElementTableProducer::beginRun(const edm::Run& iRun, const edm
         }
         lheHandler_->setHeaderFromRunInfo(&lheInfo);
         firstRun_ = false;
-    } 
-}
-
-void MELAGenMatrixElementTableProducer::endRun(const edm::Run&, const edm::EventSetup&) {
-    // nothing to do
+    }     // nothing to do
 }
 
 void MELAGenMatrixElementTableProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
