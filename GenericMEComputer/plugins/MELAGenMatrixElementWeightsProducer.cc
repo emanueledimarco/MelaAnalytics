@@ -194,31 +194,32 @@ void MELAGenMatrixElementWeightsProducer::produce(edm::Event& iEvent, const edm:
     lheHandler_->setHandle(&lheInfo);
     lheHandler_->extract();
     MELACandidate* cand = lheHandler_->getBestCandidate();
-    if (!cand) { edm::LogWarning("Mela") << "Didn't find best candidate. "; return; }
-    else mela_->setCurrentCandidate(cand);
+    if (!cand) { edm::LogWarning("Mela") << "Didn't find best candidate. "; }
+    else {
+      mela_->setCurrentCandidate(cand);
 
-    bool runOk = false;
-    switch (melaSetup_) {
-        case ZH_LO: runOk = runBestLOAssociatedV(); break;
-        case WH_LO: runOk = runBestLOAssociatedV(); break;
-        case ZH_NLO: runOk = runNLOVHApprox(); break;
-        case WH_NLO: runOk = runNLOVHApprox(); break;
-        case VBF_LO: runOk = runBestLOAssociatedVBF(); break;
-        case VBF_NLO: runOk = runNLOVBFApprox(); break;
-        case Decay: runOk = runDecay(); break;
-        case None: 
-            runOk = (cand != nullptr);
-            for (auto & me : meBranches_) me.calc(*mela_);
-            break;
-        default: 
-            break;
-    }
-    if (!runOk) { 
+      bool runOk = false;
+      switch (melaSetup_) {
+      case ZH_LO: runOk = runBestLOAssociatedV(); break;
+      case WH_LO: runOk = runBestLOAssociatedV(); break;
+      case ZH_NLO: runOk = runNLOVHApprox(); break;
+      case WH_NLO: runOk = runNLOVHApprox(); break;
+      case VBF_LO: runOk = runBestLOAssociatedVBF(); break;
+      case VBF_NLO: runOk = runNLOVBFApprox(); break;
+      case Decay: runOk = runDecay(); break;
+      case None: 
+        runOk = (cand != nullptr);
+        for (auto & me : meBranches_) me.calc(*mela_);
+        break;
+      default: 
+        break;
+      }
+      if (!runOk) { 
         edm::LogWarning("MelaSetup") << "Error setting up MELA candidate for setup " << melaSetup_; 
         for (auto & me : meBranches_) me.reset();
-    }
+      }
 
-    if (normalize_) {
+      if (normalize_) {
         double norm = meBranches_.front().value();
         if (norm == 0) edm::LogWarning("MelaSetup") << "Warning: ZERO matrix element for the normalization hypothesis.";
         for (auto it = meBranches_.begin()+1, ed = meBranches_.end(); it != ed; ++it) {
@@ -226,14 +227,15 @@ void MELAGenMatrixElementWeightsProducer::produce(edm::Event& iEvent, const edm:
           outValues->push_back(it->normValue(norm));
           //std::cout << "Putting inthe event MELA NORM weight: " << it->name() << " with value  = " << it->normValue(norm) << std::endl;
         }
-    } else {
+      } else {
         for (const auto & me : meBranches_) {
           outLabels->push_back(me.name());
           outValues->push_back(me.value());
           // std::cout << "Putting in the event MELA weight: " << me.name() << " with value  = " << me.value() << std::endl;
         }
+      }
     }
-    
+
     iEvent.put(std::move(outLabels), "labels");
     iEvent.put(std::move(outValues), "values");
     mela_->resetInputEvent();
